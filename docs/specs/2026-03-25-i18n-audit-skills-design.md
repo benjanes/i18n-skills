@@ -8,41 +8,42 @@ Today, this audit process is manual and ad hoc. There is no structured, repeatab
 
 ## Solution
 
-Four Claude Code skills that guide an agent through a structured localization audit of any codebase. Each skill addresses a distinct analysis concern, produces findings in a shared markdown report, and is independently invocable.
+Five Claude Code skills that guide an agent through a structured localization audit of any codebase. Four analysis skills each address a distinct concern, and one orchestrator skill coordinates them and consolidates findings. All are independently invocable.
 
 ## Architecture
 
 ### Skill Set
 
-| Skill | Purpose | Runs after |
-|-------|---------|------------|
-| `auditing-i18n-scope` | Discover hardcoded copy, detect already-localized strings, assess scale | (first) |
-| `auditing-i18n-readiness` | Identify structural blockers for localization | scope |
-| `auditing-i18n-tone` | Assess brand/tone consistency and cultural risks | scope |
-| `auditing-i18n-terminology` | Ensure vocabulary consistency, build proto-glossary | scope |
+| Skill | Role | Purpose |
+|-------|------|---------|
+| `auditing-i18n-readiness` | Orchestrator | Invokes missing analysis skills, consolidates recommendations |
+| `auditing-i18n-scope` | Analysis | Discover hardcoded copy, detect already-localized strings, assess scale |
+| `auditing-i18n-string-patterns` | Analysis | Analyze string construction, pluralization, formatting, non-code content |
+| `auditing-i18n-tone` | Analysis | Assess brand/tone consistency and cultural risks |
+| `auditing-i18n-terminology` | Analysis | Ensure vocabulary consistency, build proto-glossary |
 
 ### Dependency Model
 
 ```
-auditing-i18n-readiness (orchestrator)
+auditing-i18n-readiness (orchestrator — no analysis of its own)
        │
-       ├── Phases 1-6: own analysis (formatting, string patterns, etc.)
+       ├── 1. auditing-i18n-scope (if not already run)
        │
-       ├── Phase 7: invokes companion skills if not already run
-       │       ├── auditing-i18n-scope (if no scope data exists)
+       ├── 2. In parallel (after scope):
+       │       ├── auditing-i18n-string-patterns
        │       ├── auditing-i18n-tone
        │       └── auditing-i18n-terminology
        │
-       └── Phase 8: writes reports + consolidates Recommended Next Steps
+       └── 3. Consolidate Recommended Next Steps
 ```
 
-The readiness skill is the primary entry point for general i18n audit requests. It orchestrates the companion skills (scope, tone, terminology) in Phase 7, invoking any that haven't already run. Each companion skill remains independently invocable for targeted analysis.
+The readiness skill is the primary entry point for general i18n audit requests. It orchestrates the analysis skills, invoking any that haven't already run. Each analysis skill remains independently invocable for targeted use.
 
-The scope skill is a soft dependency. If any downstream skill runs without scope output, it performs lightweight string discovery on its own rather than failing.
+The scope skill is a soft dependency. If any analysis skill runs without scope output, it performs lightweight string discovery on its own rather than failing.
 
 ### Recommended Next Steps Consolidation
 
-The readiness skill, as the orchestrator, consolidates the "Recommended Next Steps" in its final phase — deduplicating, ordering by priority, and ensuring pre-extraction action items are clearly separated from extraction guidance. If a companion skill runs independently (not orchestrated), it appends its own recommendations.
+The readiness skill, as the orchestrator, consolidates the "Recommended Next Steps" in its final phase — deduplicating, ordering by priority, and ensuring pre-extraction action items are clearly separated from extraction guidance. If an analysis skill runs independently (not orchestrated), it appends its own recommendations.
 
 ### Output Files
 
@@ -195,16 +196,48 @@ description: Use when preparing a codebase for localization, beginning an i18n i
 ```yaml
 ---
 name: auditing-i18n-readiness
-description: Use when assessing localization readiness, auditing a codebase for i18n, or preparing for string extraction — identifies pre-extraction fixes, catalogs string patterns for extraction, and orchestrates tone and terminology analysis
+description: Use when assessing localization readiness, auditing a codebase for i18n, or preparing for string extraction — orchestrates all audit skills and consolidates findings
 ---
 ```
 
-### Orchestration + Dual-Output Model
+### Orchestrator Role
 
-This skill produces two distinct outputs based on a categorization framework:
+This skill performs no analysis of its own. It checks which analysis skills have already run, invokes any that are missing, and consolidates the Recommended Next Steps across all skills.
 
-- **Pre-Extraction Fixes:** Issues where the fix is library-agnostic, reduces extraction surface area, or is a bug. Primarily formatting (dates, numbers, currency) and genuinely tangled string logic.
-- **Extraction Pattern Catalog:** String management techniques (concatenation, interpolation, ternary switching, pluralization utilities) where the fix IS the extraction — restructuring to an intermediate form would be throwaway work. Documented with locations, conversion recipes, and gotchas.
+### Process
+
+**Phase 1: Check existing state**
+- Examine `i18n-pre-extraction-fixes.md` and `i18n-extraction-pattern-catalog.md` for section markers indicating which skills have run
+
+**Phase 2: Invoke missing skills**
+- `auditing-i18n-scope` first (if missing) — other skills consume its output
+- `auditing-i18n-string-patterns`, `auditing-i18n-tone`, `auditing-i18n-terminology` in parallel (after scope)
+
+**Phase 3: Consolidate**
+- Deduplicate Recommended Next Steps across all skills
+- Order by priority, separate pre-extraction actions from extraction guidance
+- Offer to create implementation plans for all actionable items
+- Write consolidated section to `i18n-pre-extraction-fixes.md`
+
+---
+
+## Skill 2b: `auditing-i18n-string-patterns`
+
+### Frontmatter
+
+```yaml
+---
+name: auditing-i18n-string-patterns
+description: Use when analyzing string construction patterns, pluralization, formatting, and non-code content for i18n — catalogs what the extraction step must handle and identifies formatting fixes to do beforehand
+---
+```
+
+### Dual-Output Model
+
+This skill categorizes findings using a framework that separates pre-extraction fixes from extraction patterns:
+
+- **Pre-Extraction Fixes** → `i18n-pre-extraction-fixes.md`: Formatting issues (dates, numbers, currency) that are library-agnostic and should be centralized before extraction.
+- **Extraction Pattern Catalog** → `i18n-extraction-pattern-catalog.md`: String construction techniques (concatenation, interpolation, ternary switching, pluralization) where the fix IS the extraction. Documented with locations, conversion recipes, and gotchas.
 
 ### Process
 
@@ -233,10 +266,10 @@ This skill produces two distinct outputs based on a categorization framework:
 - Ambiguous terms and product names → pre-extraction glossary work (feed into terminology skill)
 - Translator descriptions for extracted messages → extraction guidance
 
-**Phase 7: Write to report**
-- Write "Pre-Extraction Fixes" section: issues table, severity, effort estimates, offer to create implementation plans
-- Write "Extraction Pattern Catalog" section: technique entries with counts, examples, conversion recipes, gotchas
-- Contribute to "Recommended Next Steps" with clear separation between pre-extraction actions and extraction guidance
+**Phase 7: Write reports**
+- Write "Pre-Extraction Fixes" section to `i18n-pre-extraction-fixes.md`
+- Write full pattern catalog to `i18n-extraction-pattern-catalog.md`
+- Contribute to Recommended Next Steps in both files
 
 ---
 
