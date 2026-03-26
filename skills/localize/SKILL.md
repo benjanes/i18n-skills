@@ -146,15 +146,16 @@ Use the tech stack from the pre-extraction report to select the right reference 
 
 1. **Check for pattern catalog** — if `i18n-extraction-pattern-catalog.md` doesn't exist, run auditing-i18n-string-patterns on the target path(s) (or the entire repo if no paths were specified)
 2. **Read the reports** — read both `i18n-extraction-pattern-catalog.md` and `i18n-pre-extraction-fixes.md` for tech stack, scope metrics, string inventory, and pattern conversion recipes
-3. **Determine scope** — if the user pointed at specific files or directories, localize just those. If they said something broad like "localize the repo", use the full string inventory from the reports
-4. **Read the appropriate reference file(s)** from the table above — use the tech stack from the pre-extraction report to select the right one
-5. **Check for existing localization setup** — look for existing catalog files, i18n config, or translation imports. If the project already uses a localization library, use its patterns
-6. **Generate keys** using the hierarchical naming convention (with app prefixes in a monorepo — see the monorepo key naming section)
-7. **Check for duplicates** — before creating a new key, check if the same English string already exists in the catalog. If so, reuse that key. Pay special attention to common UI strings that belong under `common.*`
-8. **Replace strings** in source files with the framework-appropriate function call — use the pattern catalog's conversion recipes for template literals, ternaries, plurals, select patterns, and other non-trivial constructions
-9. **Update the catalog** — append new key-value pairs to the single JSON catalog (create it if it doesn't exist)
-10. **Add necessary imports** — if the replacement pattern requires an import (e.g., `useTranslation` hook), add it to the file
-11. **Report** what was done: how many strings extracted, how many were deduplicated, which files modified, where the catalog was written. In a monorepo, break down the report by app
+3. **Check for blockers** — scan the pre-extraction report for any findings marked **Blocker** severity. If blockers exist, list them for the user and strongly recommend fixing them before proceeding with extraction — these are issues (hardcoded locales, hardcoded currency symbols, etc.) that will produce incorrect results for non-English users even after strings are extracted. Do not refuse to proceed, but make the risk clear and get acknowledgment before continuing.
+4. **Determine scope** — if the user pointed at specific files or directories, localize just those. If they said something broad like "localize the repo", use the full string inventory from the reports
+5. **Read the appropriate reference file(s)** from the table above — use the tech stack from the pre-extraction report to select the right one
+6. **Check for existing localization setup** — look for existing catalog files, i18n config, or translation imports. If the project already uses a localization library, use its patterns
+7. **Generate keys** using the hierarchical naming convention (with app prefixes in a monorepo — see the monorepo key naming section)
+8. **Check for duplicates** — before creating a new key, check if the same English string already exists in the catalog. If so, reuse that key. Pay special attention to common UI strings that belong under `common.*`
+9. **Replace strings** in source files with the framework-appropriate function call — use the pattern catalog's conversion recipes for template literals, ternaries, plurals, select patterns, and other non-trivial constructions
+10. **Update the catalog** — append new key-value pairs to the single JSON catalog (create it if it doesn't exist)
+11. **Add necessary imports** — if the replacement pattern requires an import (e.g., `useTranslation` hook), add it to the file
+12. **Report** what was done: how many strings extracted, how many were deduplicated, which files modified, where the catalog was written. In a monorepo, break down the report by app
 
 ## Important considerations
 
