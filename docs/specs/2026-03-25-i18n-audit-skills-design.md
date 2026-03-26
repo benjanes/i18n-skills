@@ -8,7 +8,7 @@ Today, this audit process is manual and ad hoc. There is no structured, repeatab
 
 ## Solution
 
-Five Claude Code skills that guide an agent through a structured localization audit of any codebase. Four analysis skills each address a distinct concern, and one orchestrator skill coordinates them and consolidates findings. All are independently invocable.
+Four Claude Code skills that guide an agent through a structured localization audit of any codebase. Three analysis skills each address a distinct concern, and one orchestrator skill coordinates them and consolidates findings. All are independently invocable.
 
 ## Architecture
 
@@ -17,8 +17,7 @@ Five Claude Code skills that guide an agent through a structured localization au
 | Skill | Role | Purpose |
 |-------|------|---------|
 | `auditing-i18n-readiness` | Orchestrator | Invokes missing analysis skills, consolidates recommendations |
-| `auditing-i18n-scope` | Analysis | Discover hardcoded copy, detect already-localized strings, assess scale |
-| `auditing-i18n-string-patterns` | Analysis | Analyze string construction, pluralization, formatting, non-code content |
+| `auditing-i18n-string-patterns` | Analysis | Discover all strings, analyze construction patterns, check formatting, assess scope |
 | `auditing-i18n-tone` | Analysis | Assess brand/tone consistency and cultural risks |
 | `auditing-i18n-terminology` | Analysis | Ensure vocabulary consistency, build proto-glossary |
 
@@ -27,10 +26,11 @@ Five Claude Code skills that guide an agent through a structured localization au
 ```
 auditing-i18n-readiness (orchestrator — no analysis of its own)
        │
-       ├── 1. auditing-i18n-scope (if not already run)
+       ├── 1. auditing-i18n-string-patterns (if not already run)
+       │      (produces tech stack + string inventory + scope metrics
+       │       that tone and terminology consume)
        │
-       ├── 2. In parallel (after scope):
-       │       ├── auditing-i18n-string-patterns
+       ├── 2. In parallel (after string-patterns):
        │       ├── auditing-i18n-tone
        │       └── auditing-i18n-terminology
        │
@@ -39,7 +39,7 @@ auditing-i18n-readiness (orchestrator — no analysis of its own)
 
 The readiness skill is the primary entry point for general i18n audit requests. It orchestrates the analysis skills, invoking any that haven't already run. Each analysis skill remains independently invocable for targeted use.
 
-The scope skill is a soft dependency. If any analysis skill runs without scope output, it performs lightweight string discovery on its own rather than failing.
+The string-patterns skill runs first because it produces the tech stack and string inventory that tone and terminology consume. If tone or terminology runs independently without this data, it performs lightweight string discovery on its own rather than failing.
 
 ### Recommended Next Steps Consolidation
 
@@ -54,8 +54,8 @@ Skills write to two files in the target repo root:
 ```markdown
 # i18n Pre-Extraction Fixes
 
-## Tech Stack & Configuration          <!-- auditing-i18n-scope -->
-## Scope Assessment                    <!-- auditing-i18n-scope -->
+## Tech Stack & Configuration          <!-- auditing-i18n-string-patterns -->
+## Scope Assessment                    <!-- auditing-i18n-string-patterns -->
 ## Pre-Extraction Fixes                <!-- auditing-i18n-readiness -->
 ## Tone & Brand Analysis               <!-- auditing-i18n-tone -->
 ## Terminology Consistency             <!-- auditing-i18n-terminology -->
@@ -90,106 +90,15 @@ Personal skills in `~/.claude/skills/`:
 
 ```
 ~/.claude/skills/
-  auditing-i18n-scope/SKILL.md
   auditing-i18n-readiness/SKILL.md
+  auditing-i18n-string-patterns/SKILL.md
   auditing-i18n-tone/SKILL.md
   auditing-i18n-terminology/SKILL.md
 ```
 
 ---
 
-## Skill 1: `auditing-i18n-scope`
-
-### Frontmatter
-
-```yaml
----
-name: auditing-i18n-scope
-description: Use when preparing a codebase for localization, beginning an i18n initiative, or assessing the scale of hardcoded copy before string extraction
----
-```
-
-### Process
-
-**Phase 1: Detect tech stack**
-- Identify languages, frameworks, templating systems
-- Check for existing i18n setup (i18next, react-intl, vue-i18n, .strings, strings.xml, .arb, etc.)
-- Write findings to report "Tech Stack & Configuration" section
-
-**Phase 2: Identify UI surface area**
-- Find all files that render user-facing content
-- Components, views, templates, storyboards, XIBs, layout XML
-- Establish the search perimeter; exclude test files, build output, node_modules
-
-**Phase 3: Detect already-localized strings**
-- Find strings using i18n library calls: `t('key')`, `NSLocalizedString`, `getString(R.string.x)`, `$t('key')`, `intl.formatMessage`, etc.
-- Catalog as "already localized"
-
-**Phase 4: Scan for hardcoded strings**
-- Within UI surface area, find all string literals that appear user-facing
-- Filter out non-user-facing strings: log messages, error codes, debug output, CSS classes, route paths, event names, identifiers, config values
-- Stack-specific heuristics:
-  - **JSX/TSX:** text content between tags, `placeholder=`, `aria-label=`, `title=`, `alt=`
-  - **Swift/ObjC:** bare string literals in UI code (not `NSLocalizedString`), storyboard text
-  - **Kotlin/Java:** `setText()`, `setTitle()`, XML `android:text=`, `android:hint=`
-  - **Templates (Vue/Angular/Svelte):** text interpolation, attribute bindings with string values
-  - **General:** string arguments to UI-rendering functions
-
-**Phase 5: Categorize findings**
-- By location: file, component/view, screen/feature area
-- By type: labels, buttons, headings, body text, error messages, placeholders, tooltips, a11y text
-- By confidence: high (clearly user-facing), medium (likely), low (uncertain)
-
-**Phase 6: Generate scope metrics**
-- Total string count with confidence breakdown
-- Localized vs. hardcoded ratio (done vs. remaining)
-- File count and density heatmap (files ordered by string count)
-- Breakdown by string type
-- Breakdown by feature area (if discernible from directory/component structure)
-
-**Phase 7: Write to report**
-- Append "Tech Stack & Configuration" and "Scope Assessment" sections
-- Include summary tables, metrics, file heatmap
-- Contribute initial items to "Recommended Next Steps"
-
-### Output Example
-
-```markdown
-## 1. Scope Assessment
-
-**Summary:** 847 hardcoded strings across 62 files. 23 strings already localized (3%).
-
-| Metric | Count |
-|--------|-------|
-| Total user-facing strings | 870 |
-| Already localized | 23 (3%) |
-| Hardcoded (high confidence) | 612 |
-| Hardcoded (medium confidence) | 189 |
-| Hardcoded (low confidence) | 46 |
-| Files with hardcoded strings | 62 |
-
-### String Density Heatmap (top 10 files)
-| File | Strings | Type |
-|------|---------|------|
-| src/components/Dashboard.tsx | 47 | labels, headings, buttons |
-| src/pages/Settings.tsx | 38 | labels, descriptions |
-| ... | ... | ... |
-
-### Breakdown by Type
-| Type | Count | % |
-|------|-------|---|
-| Button labels | 156 | 18% |
-| Headings | 89 | 11% |
-| Body text | 203 | 24% |
-| Error messages | 134 | 16% |
-| Placeholders | 78 | 9% |
-| Tooltips | 45 | 5% |
-| A11y text | 142 | 17% |
-```
-
----
-
-## Skill 2: `auditing-i18n-readiness`
+## Skill 1: `auditing-i18n-readiness`
 
 ### Frontmatter
 
@@ -210,7 +119,7 @@ This skill performs no analysis of its own. It checks which analysis skills have
 - Examine `i18n-pre-extraction-fixes.md` and `i18n-extraction-pattern-catalog.md` for section markers indicating which skills have run
 
 **Phase 2: Invoke missing skills**
-- `auditing-i18n-scope` first (if missing) — other skills consume its output
+- `auditing-i18n-string-patterns` first (if missing) — other skills consume its output
 - `auditing-i18n-string-patterns`, `auditing-i18n-tone`, `auditing-i18n-terminology` in parallel (after scope)
 
 **Phase 3: Consolidate**
@@ -221,7 +130,7 @@ This skill performs no analysis of its own. It checks which analysis skills have
 
 ---
 
-## Skill 2b: `auditing-i18n-string-patterns`
+## Skill 2: `auditing-i18n-string-patterns`
 
 ### Frontmatter
 
@@ -274,6 +183,7 @@ This skill categorizes findings using a framework that separates pre-extraction 
 ---
 
 ## Skill 3: `auditing-i18n-tone`
+
 
 ### Frontmatter
 

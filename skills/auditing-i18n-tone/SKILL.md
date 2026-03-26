@@ -18,7 +18,7 @@ Tone fixes are **pre-extraction work** — source copy should be consistent and 
 - Identifying copy that will be problematic to translate (idioms, humor, culture-specific references)
 - Assessing whether the app's "voice" is stable enough to localize coherently
 
-**Do not use for:** Scope assessment (use auditing-i18n-scope), structural issues (use auditing-i18n-readiness), or vocabulary consistency (use auditing-i18n-terminology).
+**Do not use for:** Scope/string pattern assessment (use auditing-i18n-string-patterns), vocabulary consistency (use auditing-i18n-terminology), or full readiness audit (use auditing-i18n-readiness).
 
 ## Process
 
@@ -36,7 +36,7 @@ digraph tone {
 
 ### Phase 1: Load Context
 
-- Read scope output from `i18n-pre-extraction-fixes.md` for the string inventory and tech stack
+- Read tech stack and string inventory from `i18n-pre-extraction-fixes.md` (written by auditing-i18n-string-patterns)
 - If scope hasn't run, perform lightweight discovery — scan dependency files (package.json, Podfile, build.gradle) to detect the tech stack, then sample up to 20 UI-rendering files to build a working string inventory. This is not a complete inventory — just enough to proceed with tone analysis.
 - Search for brand/style guide documents in the repo:
   - `STYLE_GUIDE.md`, `WRITING_GUIDE.md`, `CONTENT_GUIDE.md`

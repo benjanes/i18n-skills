@@ -1,16 +1,17 @@
 ---
 name: auditing-i18n-string-patterns
-description: Use when analyzing string construction patterns, pluralization, formatting, and non-code content for i18n — catalogs what the extraction step must handle and identifies formatting fixes to do beforehand
+description: Use when analyzing a codebase's strings for i18n — discovers all hardcoded copy, analyzes construction patterns and formatting, and produces scope metrics, pre-extraction fixes, and an extraction pattern catalog
 ---
 
 # Auditing I18n String Patterns
 
-Analyze a codebase's string management techniques and locale-sensitive formatting to produce two outputs:
+Discover all user-facing strings in a codebase, analyze how they're constructed, and assess locale-sensitive formatting. This skill produces:
 
-1. **Pre-extraction formatting fixes** (written to `i18n-pre-extraction-fixes.md`) — hardcoded date/number/currency formatting that should be centralized behind locale-aware APIs before extraction begins.
-2. **Extraction pattern catalog** (written to `i18n-extraction-pattern-catalog.md`) — an inventory of string construction techniques (concatenation, interpolation, pluralization utilities, inline ternaries, etc.) with locations, conversion recipes, and gotchas for the extraction step.
+1. **Scope metrics and tech stack** (written to `i18n-pre-extraction-fixes.md`) — quantitative inventory of all strings, localization coverage, and density heatmap.
+2. **Pre-extraction formatting fixes** (written to `i18n-pre-extraction-fixes.md`) — hardcoded date/number/currency formatting that should be centralized behind locale-aware APIs before extraction.
+3. **Extraction pattern catalog** (written to `i18n-extraction-pattern-catalog.md`) — an inventory of string construction techniques with locations, conversion recipes, and gotchas for the extraction step.
 
-**Announce at start:** "I'm using the auditing-i18n-string-patterns skill to analyze string construction and formatting patterns."
+**Announce at start:** "I'm using the auditing-i18n-string-patterns skill to inventory strings and analyze construction patterns."
 
 ## Categorization Framework
 
@@ -33,7 +34,7 @@ A finding belongs here if:
 - The extraction step directly converts the pattern to ICU message format in one step
 - There is no useful intermediate representation between the current code and the i18n version
 
-Examples: Template literals building sentences (`\`Hello ${name}\`` → `t('greeting', { name })`), ternary text switching, pluralization utilities and ternary plurals (replaced by ICU `{count, plural, ...}`), title/placeholder/aria-label attributes.
+Examples: Template literals building sentences, ternary text switching, pluralization utilities and ternary plurals (replaced by ICU `{count, plural, ...}`), title/placeholder/aria-label attributes.
 
 ### Edge Cases
 
@@ -41,36 +42,158 @@ Some string construction is **so tangled** (multi-line assembly, conditional log
 
 ## When to Use
 
+- Starting a localization initiative and need to know the scale of work
 - Analyzing what string patterns exist and how extraction should handle them
 - Identifying formatting issues to fix before extraction
 - Building a pattern catalog that guides extraction tooling
-- Finding non-code localizable content (a11y attributes, HTML attributes, CSS content)
-- Evaluating whether translators will have enough context
+- Assessing how much hardcoded copy exists before string extraction
 
-**Do not use for:** Discovering the scope of hardcoded copy (use auditing-i18n-scope), analyzing tone (use auditing-i18n-tone), checking terminology consistency (use auditing-i18n-terminology), or running a full readiness audit (use auditing-i18n-readiness, which orchestrates all skills including this one).
+**Do not use for:** Analyzing tone (use auditing-i18n-tone), checking terminology consistency (use auditing-i18n-terminology), or running a full readiness audit (use auditing-i18n-readiness, which orchestrates all skills including this one).
 
 ## Process
 
-Follow these phases in order. Write pre-extraction formatting findings to `i18n-pre-extraction-fixes.md` and extraction patterns to `i18n-extraction-pattern-catalog.md`. Create either file if it does not exist. If the scope skill has already run, consume its tech stack and string inventory from `i18n-pre-extraction-fixes.md`. If not, perform a lightweight discovery pass first.
+Follow these phases in order. Write scope metrics and pre-extraction fixes to `i18n-pre-extraction-fixes.md` and extraction patterns to `i18n-extraction-pattern-catalog.md`. Create either file if it does not exist.
 
 ```dot
 digraph string_patterns {
-    "Phase 1:\nLoad Context" -> "Phase 2:\nAnalyze String Construction";
-    "Phase 2:\nAnalyze String Construction" -> "Phase 3:\nDetect Pluralization Patterns";
-    "Phase 3:\nDetect Pluralization Patterns" -> "Phase 4:\nCheck Formatting Patterns";
-    "Phase 4:\nCheck Formatting Patterns" -> "Phase 5:\nScan Non-Code Content";
-    "Phase 5:\nScan Non-Code Content" -> "Phase 6:\nAssess Translator Context";
+    "Phase 1:\nDetect Tech Stack" -> "Phase 2:\nInventory Strings";
+    "Phase 2:\nInventory Strings" -> "Phase 3:\nAnalyze String Construction";
+    "Phase 3:\nAnalyze String Construction" -> "Phase 4:\nDetect Pluralization Patterns";
+    "Phase 4:\nDetect Pluralization Patterns" -> "Phase 5:\nCheck Formatting Patterns";
+    "Phase 5:\nCheck Formatting Patterns" -> "Phase 6:\nAssess Translator Context";
     "Phase 6:\nAssess Translator Context" -> "Phase 7:\nWrite Reports";
 }
 ```
 
-### Phase 1: Load Context
+### Phase 1: Detect Tech Stack
 
-- Check if `i18n-pre-extraction-fixes.md` exists with scope data
-- If yes: read tech stack and string inventory from the report
-- If no: perform lightweight discovery — scan dependency files (package.json, Podfile, build.gradle) to detect the tech stack, then sample up to 20 UI-rendering files for string patterns. This is not a complete inventory — just enough context to proceed with analysis.
+Identify the project's technology:
+- **Languages:** TypeScript, JavaScript, Swift, Kotlin, Java, Objective-C, Dart, etc.
+- **Frameworks:** React, Vue, Angular, Svelte, SwiftUI, UIKit, Jetpack Compose, Flutter, etc.
+- **Templating:** JSX, HTML templates, Storyboards, XIBs, XML layouts, etc.
+- **Existing i18n:** Look for i18next, react-intl, vue-i18n, angular/localize, NSLocalizedString usage, strings.xml, .strings files, .arb files, or any i18n library in dependencies
 
-### Phase 2: Analyze String Construction
+Write tech stack findings to the report immediately — downstream skills depend on this.
+
+### Phase 2: Inventory Strings
+
+Find all user-facing strings in the codebase. This phase combines string discovery, non-code content scanning, and categorization into a single pass.
+
+#### 2a. Identify UI Surface Area
+
+Find all files that render user-facing content. Exclude test files, build output, node_modules, Pods, generated code.
+
+| Stack | UI files to scan |
+|-------|-----------------|
+| React/Next | `.tsx`, `.jsx` files with JSX returns |
+| Vue | `.vue` SFCs, especially `<template>` blocks |
+| Angular | `.html` templates, `.ts` components with `template:` |
+| Svelte | `.svelte` files |
+| Swift (UIKit) | `.swift` files referencing `UILabel`, `UIButton`, `.text =`, Storyboard/XIB files |
+| Swift (SwiftUI) | `.swift` files with `Text()`, `Label()`, `Button()` |
+| Kotlin/Java (Android) | XML layouts (`res/layout/`), Compose files with `Text()`, `Button()` |
+| Flutter | `.dart` files with `Text()`, `AppBar(title:)` |
+
+Record the total file count — this bounds the search.
+
+#### 2b. Detect Already-Localized Strings
+
+Scan for strings already going through an i18n system:
+
+| Pattern | Framework |
+|---------|-----------|
+| `t('key')`, `t("key")` | i18next, react-i18next |
+| `intl.formatMessage(...)` | react-intl |
+| `$t('key')` | vue-i18n |
+| `{{ 'key' \| translate }}` | Angular |
+| `NSLocalizedString(...)` | iOS (ObjC/Swift) |
+| `String(localized:)` | iOS (Swift 5.7+) |
+| `getString(R.string.x)` | Android (Java/Kotlin) |
+| `stringResource(R.string.x)` | Jetpack Compose |
+| `AppLocalizations.of(context)` | Flutter |
+
+Count these as "already localized."
+
+#### 2c. Scan for Hardcoded Strings
+
+Within the UI surface area, find string literals that appear to be user-facing copy.
+
+**What to find:**
+- Text content rendered to users (labels, headings, body text, buttons)
+- Placeholder text, tooltip text, title attributes
+- Error messages and validation messages shown to users
+- Accessibility text (aria-labels, alt text, contentDescription)
+- CSS `content: "..."` in stylesheets (::before, ::after pseudo-elements)
+- SVGs with `<text>` elements containing hardcoded strings
+- Images with embedded text (require asset variants per locale)
+- Email templates, push notifications, in-app messages
+
+**What to filter out (not user-facing):**
+- Log messages (`console.log`, `print`, `Log.d`)
+- CSS class names, style values
+- Route paths, URLs, API endpoints
+- Event names, action types, Redux actions
+- Configuration keys, environment variable names
+- Import paths, file paths
+- Test assertions, test data
+- Comments and documentation strings
+- Enum values and constant identifiers
+
+**Stack-specific heuristics:**
+
+**JSX/TSX:**
+- Text between JSX tags: `<h1>Dashboard</h1>`, `<p>Welcome back</p>`
+- String props: `placeholder="Search..."`, `aria-label="Close"`, `title="Settings"`
+- Ternary/conditional text: `{isNew ? "Create" : "Update"}`
+
+**Vue templates:**
+- Text between tags outside `{{ }}` interpolation
+- Attribute bindings with string literals: `:placeholder="'Search...'"`
+- `v-text` directives with string literals
+
+**Swift:**
+- String literals assigned to `.text`, `.title`, `.placeholder`
+- String arguments to `Text()`, `Label()`, `Button()` in SwiftUI
+- Strings in `.alert()`, `.confirmationDialog()`, `.navigationTitle()`
+
+**Kotlin/Android:**
+- XML: `android:text="..."`, `android:hint="..."`, `android:contentDescription="..."`
+- Compose: string arguments to `Text()`, `Button()`, `TextField(placeholder = ...)`
+
+**Confidence levels:**
+- **High:** String literal directly rendered in UI context (e.g., JSX text content, `android:text=`)
+- **Medium:** String in a variable/constant that is likely rendered but assignment isn't directly in UI code
+- **Low:** String that could be user-facing but context is ambiguous
+
+#### 2d. Categorize Findings
+
+Group every discovered string:
+
+**By type:**
+| Type | Examples |
+|------|---------|
+| Button/action labels | "Save", "Cancel", "Delete" |
+| Headings | "Dashboard", "Settings", "Profile" |
+| Body text | "Welcome back! Here's your summary." |
+| Error messages | "Something went wrong. Please try again." |
+| Placeholders | "Search...", "Enter your email" |
+| Tooltips | "Click to expand", "Copy to clipboard" |
+| A11y text | aria-labels, alt text, contentDescription |
+| Status text | "Loading...", "No results found" |
+| CSS content | `content: "..."` pseudo-element text |
+
+**By location:** file path, component/view name, screen/feature area (inferred from directory structure).
+
+**By confidence:** high, medium, low.
+
+**By string construction technique:**
+Note the string management techniques observed during scanning:
+- Are strings mostly inline literals, template literals with interpolation, or concatenated from parts?
+- Are there utility functions for string construction (e.g., `pluralize()`, format helpers)?
+- Are there patterns like ternary text switching inside JSX or conditional string assembly?
+- Are there centralized string constant files, or is everything scattered inline?
+
+### Phase 3: Analyze String Construction
 
 Scan for patterns that break when translated. Different languages have different word order, grammatical gender, and sentence structure.
 
@@ -119,7 +242,7 @@ For each pattern found, record:
 - **Conversion note** (how extraction should handle it — separate messages, ICU placeholders, etc.)
 - **Gotchas** (e.g., "ternary switches a single word mid-sentence — need two complete separate messages, not one message with a placeholder for the differing word")
 
-### Phase 3: Detect Pluralization Patterns
+### Phase 4: Detect Pluralization Patterns
 
 How does the app handle plural forms today? **All pluralization findings go in `i18n-extraction-pattern-catalog.md`** — the extraction step replaces them with ICU plural syntax. There is no value in standardizing English-only pluralization before extraction.
 
@@ -134,7 +257,7 @@ How does the app handle plural forms today? **All pluralization findings go in `
 
 For each pattern found, record the technique, count of occurrences, example locations, and the conversion recipe — including gotchas (e.g., "utility has an exceptions map for irregular plurals — check the map and preserve irregular forms in ICU messages").
 
-### Phase 4: Check Formatting Patterns
+### Phase 5: Check Formatting Patterns
 
 Scan for hardcoded locale-sensitive formatting. **These findings go in `i18n-pre-extraction-fixes.md`** — centralizing formatting behind locale-aware APIs is independent of string extraction and should be done first.
 
@@ -165,38 +288,6 @@ Rate each as:
 - **Blocker:** User sees wrong format for their locale (hardcoded `en-US`, hardcoded `$`)
 - **Warning:** Inconsistent but functional (missing locale arg defaults to system locale)
 
-### Phase 5: Scan Non-Code Content
-
-Find localizable content outside of typical source strings. **These findings go in `i18n-extraction-pattern-catalog.md`** — they are extraction targets that the extraction agent needs to locate and handle.
-
-**Images and SVGs:**
-- Images with embedded text (screenshots, diagrams, marketing banners)
-- SVGs with `<text>` elements containing hardcoded strings
-- These require asset variants per locale
-
-**CSS content:**
-- `content: "..."` in stylesheets (::before, ::after pseudo-elements)
-- Often used for decorative text, icons-with-labels, or status indicators
-
-**Accessibility attributes:**
-- `aria-label`, `aria-placeholder`, `aria-roledescription`
-- `alt` text on images
-- `title` attributes on elements
-- `contentDescription` in Android XML/Compose
-- `accessibilityLabel` in SwiftUI
-- These are read aloud by screen readers and must be translated
-
-**HTML attributes:**
-- `placeholder` text on inputs
-- `title` attributes (tooltips)
-- Confirmation dialog messages (often passed as string arguments)
-
-**Email templates, push notifications, in-app messages:**
-- Often in separate template files or backend config
-- Easy to miss during a code-focused audit
-
-For each category, record the count, example locations, and any gotchas (e.g., "some placeholder attributes contain interpolated values — these need ICU placeholders, not plain extraction").
-
 ### Phase 6: Assess Translator Context
 
 Evaluate whether translators will be able to produce good translations from extracted strings.
@@ -222,30 +313,38 @@ Evaluate whether translators will be able to produce good translations from extr
 
 ### Phase 7: Write Reports
 
-Write to two separate files:
+Write to two files:
 
-#### `i18n-pre-extraction-fixes.md` — Formatting Fixes
+#### `i18n-pre-extraction-fixes.md`
 
-Append a "Pre-Extraction Fixes" section (or replace if it already exists) with formatting and structural issues found in Phases 4 and 2 (tangled logic only).
+Create or update with:
 
-1. **Summary:** Total pre-extraction issues found, breakdown by severity (blockers / warnings)
-2. **Issues table:** For each issue category:
+1. **Tech Stack & Configuration** (from Phase 1)
+2. **Scope Assessment:**
+   - Summary line (e.g., "847 hardcoded strings across 62 files. 23 strings already localized (3%).")
+   - Metrics: total strings, localized vs hardcoded, confidence breakdown, file count
+   - String density heatmap (top 10 files by string count)
+   - Breakdown by string type
+   - Breakdown by feature area (if discernible from directory structure)
+   - String construction techniques observed
+3. **Pre-Extraction Fixes** — formatting and structural issues:
 
 | Category | Severity | Count | Example | Remediation |
 |----------|----------|-------|---------|-------------|
 | Hardcoded date formats | Blocker | 19 | `Occasion.ts:62` — `'h:mm a'` | Centralize through `Intl.DateTimeFormat` with locale param |
 | Hardcoded locale in API calls | Blocker | 5 | `Contact.ts:93` — `toLocaleString('default')` | Pass explicit locale parameter |
 | Hardcoded currency | Blocker | 7 | `aura.ts:54` — `'$0'` | Use `Intl.NumberFormat` with locale-aware currency |
-| Bug: wrong variable | Blocker | 1 | `TimelineList.tsx:50` | Fix variable reference |
-| Tangled string logic | Warning | 3 | `SharedResourceUtilityBar:83` | Simplify multi-line template assembly |
 
-3. **Effort estimate** per category: small (< 1 day), medium (1-3 days), large (3+ days)
+   Include effort estimates per category: small (< 1 day), medium (1-3 days), large (3+ days).
+
 4. **Bugs found during audit** that should be fixed before extraction
 5. Contribute items to **Recommended Next Steps**
 
-#### `i18n-extraction-pattern-catalog.md` — Extraction Pattern Catalog
+If this is the first skill to run, create the full report skeleton with placeholder sections for Tone & Brand Analysis and Terminology Consistency.
 
-Create or replace this file with the full pattern catalog.
+#### `i18n-extraction-pattern-catalog.md`
+
+Create or replace with the full pattern catalog:
 
 1. **Summary:** Total extraction patterns cataloged, breakdown by technique type
 
@@ -276,30 +375,30 @@ Pattern types to catalog (as applicable):
 - CSS content strings
 - SVG text elements
 
-3. **Cross-cutting gotchas:** Patterns that span multiple technique types or require special attention (e.g., "some ternaries switch text AND do pluralization in the same expression — both concerns must be addressed together")
-
-4. **Translator context notes:** Ambiguous strings, product names, variable context — everything translators need to know
-
-5. **Recommended Next Steps** with extraction guidance, suggested ordering, and pointers to key patterns and gotchas
+3. **Cross-cutting gotchas:** Patterns that span multiple technique types or require special attention
+4. **Translator context notes:** Ambiguous strings, product names, variable context
+5. **Recommended Next Steps** with extraction guidance, suggested ordering, and pointers to key patterns
 
 ## Quick Reference
 
 | Phase | What to find | Output file |
 |-------|-------------|------------|
+| Tech stack | Languages, frameworks, existing i18n | `i18n-pre-extraction-fixes.md` |
+| String inventory | All user-facing strings, already-localized, non-code content | `i18n-pre-extraction-fixes.md` (scope metrics) |
 | String construction | Concatenation, fragments, embedded logic | `i18n-extraction-pattern-catalog.md` (unless genuinely tangled → `i18n-pre-extraction-fixes.md`) |
 | Pluralization | Ternary plurals, utilities, verb conjugation | `i18n-extraction-pattern-catalog.md` |
 | Formatting | Hardcoded dates, numbers, currency, units | `i18n-pre-extraction-fixes.md` |
-| Non-code content | Images with text, CSS content, a11y attrs, HTML attrs | `i18n-extraction-pattern-catalog.md` |
 | Translator context | Ambiguous strings, unclear variables, product names | Both (glossary items → pre-extraction, translator descriptions → catalog) |
 
 ## Common Mistakes
 
+- **Including non-user-facing strings:** Log messages, debug output, and configuration keys inflate the count and waste downstream analysis time. When in doubt, mark as low confidence rather than including at high confidence.
+- **Missing accessibility text:** `aria-label`, `alt`, `contentDescription` are user-facing (screen readers read them aloud). Always include them.
+- **Ignoring existing localization:** If 40% of strings are already localized, that dramatically changes the scope. Always check for existing i18n setup first.
+- **Counting duplicates:** The same string appearing in 10 files is 10 extraction points but only 1 translation. Note both counts (occurrences vs. unique strings).
 - **Treating string patterns as pre-extraction fixes:** Template literals, ternary plurals, and concatenation are resolved BY extraction, not before it. Don't recommend restructuring them to an intermediate form — that's throwaway work. Catalog them for extraction instead.
-- **Treating formatting as an extraction concern:** Date, number, and currency formatting centralization is independent of string extraction. These should be fixed first — they reduce the surface area extraction has to handle.
-- **Ignoring "minor" concatenation in the catalog:** Even `"Welcome, " + name` is a pattern the extraction agent needs to know about. Every concatenation that builds a sentence must be in the catalog with its conversion recipe.
+- **Treating formatting as an extraction concern:** Date, number, and currency formatting centralization is independent of string extraction. These should be fixed first.
 - **Missing the gotchas:** The catalog's value is in the details. "22 ternary plurals" is less useful than "22 ternary plurals, 5 of which also conjugate verbs — both noun and verb must be inside the ICU plural block."
-- **Assuming English plural rules:** English has 2 forms (singular/plural). Arabic has 6. Polish has 4. Chinese has 1. The catalog must note this so the extraction agent uses ICU plural syntax, not a simplistic ternary replacement.
+- **Assuming English plural rules:** English has 2 forms (singular/plural). Arabic has 6. Polish has 4. Chinese has 1.
 - **Missing CSS content:** `content: "..."` in pseudo-elements is invisible in typical string searches but visible to users.
-- **Overlooking accessibility strings:** Screen reader users in other locales need translated `aria-label` and `alt` text. These are first-class extraction targets.
-- **Cataloging every string individually:** The pattern catalog should group by technique, not list every individual string. Use representative examples and counts, with full location lists in tables.
-- **Writing to wrong file:** Pre-extraction fixes go in `i18n-pre-extraction-fixes.md`. Extraction patterns go in `i18n-extraction-pattern-catalog.md`. Don't mix them.
+- **Writing to wrong file:** Pre-extraction fixes and scope metrics go in `i18n-pre-extraction-fixes.md`. Extraction patterns go in `i18n-extraction-pattern-catalog.md`. Don't mix them.

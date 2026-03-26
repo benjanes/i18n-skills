@@ -18,7 +18,7 @@ Terminology standardization and glossary creation are **pre-extraction work** �
 - Building a glossary for translators
 - Identifying ambiguous terms that need context notes for translation
 
-**Do not use for:** Scope assessment (use auditing-i18n-scope), structural issues (use auditing-i18n-readiness), or tone analysis (use auditing-i18n-tone).
+**Do not use for:** Scope/string pattern assessment (use auditing-i18n-string-patterns), tone analysis (use auditing-i18n-tone), or full readiness audit (use auditing-i18n-readiness).
 
 ## Process
 
@@ -36,7 +36,7 @@ digraph terminology {
 
 ### Phase 1: Load Context
 
-- Read scope output from `i18n-pre-extraction-fixes.md` for the string inventory and tech stack
+- Read tech stack and string inventory from `i18n-pre-extraction-fixes.md` (written by auditing-i18n-string-patterns)
 - If scope hasn't run, perform lightweight discovery — scan dependency files (package.json, Podfile, build.gradle) to detect the tech stack, then sample up to 20 UI-rendering files to build a working string inventory. This is not a complete inventory — just enough to proceed with terminology analysis.
 - Note the app's domain (e.g., e-commerce, SaaS, social, finance) — domain shapes what terms matter most
 
