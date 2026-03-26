@@ -20,7 +20,7 @@ Discover all hardcoded copy in a codebase, detect already-localized strings, and
 
 ## Process
 
-Follow these phases in order. Write findings to `i18n-audit-report.md` in the repo root. If the file already exists, replace the "Tech Stack & Configuration" and "Scope Assessment" sections while preserving other sections.
+Follow these phases in order. Write findings to `i18n-pre-extraction-fixes.md` in the repo root. If the file already exists, replace the "Tech Stack & Configuration" and "Scope Assessment" sections while preserving other sections.
 
 ```dot
 digraph scope {
@@ -145,6 +145,15 @@ Group every discovered string:
 
 **By confidence:** high, medium, low.
 
+**By string construction technique (lightweight — feeds into readiness analysis):**
+Note the string management techniques observed during scanning. This is not a deep analysis — just enough to give downstream skills (especially readiness) a head start on what patterns to expect.
+- Are strings mostly inline literals, template literals with interpolation, or concatenated from parts?
+- Are there utility functions for string construction (e.g., `pluralize()`, format helpers)?
+- Are there patterns like ternary text switching inside JSX or conditional string assembly?
+- Are there centralized string constant files, or is everything scattered inline?
+
+Record a brief "string techniques observed" summary — e.g., "Strings are predominantly inline JSX literals. Template literals with `${}` interpolation are used for dynamic content (~60 instances). A custom `pluralize()` utility handles plurals. No centralized string files."
+
 ### Phase 6: Generate Scope Metrics
 
 Produce a quantitative summary:
@@ -158,7 +167,7 @@ Produce a quantitative summary:
 
 ### Phase 7: Write to Report
 
-Create or update `i18n-audit-report.md` with:
+Create or update `i18n-pre-extraction-fixes.md` with:
 
 1. **Tech Stack & Configuration** section (from Phase 1)
 2. **Scope Assessment** section containing:
@@ -181,7 +190,7 @@ If this is the first skill to run, create the full report skeleton with placehol
 | 4. Hardcoded | Scan for string literals in UI code | String inventory |
 | 5. Categorize | Group by type, location, confidence | Categorized inventory |
 | 6. Metrics | Count, rank, break down | Quantitative summary |
-| 7. Report | Write to i18n-audit-report.md | Committed report section |
+| 7. Report | Write to i18n-pre-extraction-fixes.md | Committed report section |
 
 ## Common Mistakes
 

@@ -24,40 +24,53 @@ Four Claude Code skills that guide an agent through a structured localization au
 ### Dependency Model
 
 ```
-auditing-i18n-scope (produces string inventory + tech stack context)
+auditing-i18n-readiness (orchestrator)
        │
-       ▼
-auditing-i18n-readiness  ┐
-auditing-i18n-tone       ├── consume scope output, run in any order
-auditing-i18n-terminology┘
+       ├── Phases 1-6: own analysis (formatting, string patterns, etc.)
+       │
+       ├── Phase 7: invokes companion skills if not already run
+       │       ├── auditing-i18n-scope (if no scope data exists)
+       │       ├── auditing-i18n-tone
+       │       └── auditing-i18n-terminology
+       │
+       └── Phase 8: writes reports + consolidates Recommended Next Steps
 ```
 
-The scope skill is a soft dependency. If a downstream skill runs without scope output, it performs lightweight string discovery on its own rather than failing.
+The readiness skill is the primary entry point for general i18n audit requests. It orchestrates the companion skills (scope, tone, terminology) in Phase 7, invoking any that haven't already run. Each companion skill remains independently invocable for targeted analysis.
 
-### Shared Report
+The scope skill is a soft dependency. If any downstream skill runs without scope output, it performs lightweight string discovery on its own rather than failing.
 
-All skills append to `i18n-audit-report.md` in the target repo root:
+### Recommended Next Steps Consolidation
+
+The readiness skill, as the orchestrator, consolidates the "Recommended Next Steps" in its final phase — deduplicating, ordering by priority, and ensuring pre-extraction action items are clearly separated from extraction guidance. If a companion skill runs independently (not orchestrated), it appends its own recommendations.
+
+### Output Files
+
+Skills write to two files in the target repo root:
+
+**`i18n-pre-extraction-fixes.md`** — pre-extraction findings and recommendations:
 
 ```markdown
-# Localization Audit Report
+# i18n Pre-Extraction Fixes
 
-## Tech Stack & Configuration
-<!-- auditing-i18n-scope -->
+## Tech Stack & Configuration          <!-- auditing-i18n-scope -->
+## Scope Assessment                    <!-- auditing-i18n-scope -->
+## Pre-Extraction Fixes                <!-- auditing-i18n-readiness -->
+## Tone & Brand Analysis               <!-- auditing-i18n-tone -->
+## Terminology Consistency             <!-- auditing-i18n-terminology -->
+## Recommended Next Steps              <!-- each skill contributes -->
+```
 
-## 1. Scope Assessment
-<!-- auditing-i18n-scope -->
+**`i18n-extraction-pattern-catalog.md`** — context for the extraction step:
 
-## 2. Readiness Issues
-<!-- auditing-i18n-readiness -->
+```markdown
+# i18n Extraction Pattern Catalog
 
-## 3. Tone & Brand Analysis
-<!-- auditing-i18n-tone -->
-
-## 4. Terminology Consistency
-<!-- auditing-i18n-terminology -->
-
-## 5. Recommended Next Steps
-<!-- each skill contributes -->
+## Summary                             <!-- auditing-i18n-readiness -->
+## Pattern Entries                     <!-- one section per technique type -->
+## Cross-Cutting Gotchas               <!-- auditing-i18n-readiness -->
+## Translator Context Notes            <!-- auditing-i18n-readiness -->
+## Recommended Next Steps              <!-- extraction guidance -->
 ```
 
 ### Framework Agnosticism
@@ -182,54 +195,48 @@ description: Use when preparing a codebase for localization, beginning an i18n i
 ```yaml
 ---
 name: auditing-i18n-readiness
-description: Use when assessing localization blockers — structural issues like string concatenation, naive pluralization, hardcoded formatting, or missing translator context that must be fixed before string extraction
+description: Use when assessing localization readiness, auditing a codebase for i18n, or preparing for string extraction — identifies pre-extraction fixes, catalogs string patterns for extraction, and orchestrates tone and terminology analysis
 ---
 ```
+
+### Orchestration + Dual-Output Model
+
+This skill produces two distinct outputs based on a categorization framework:
+
+- **Pre-Extraction Fixes:** Issues where the fix is library-agnostic, reduces extraction surface area, or is a bug. Primarily formatting (dates, numbers, currency) and genuinely tangled string logic.
+- **Extraction Pattern Catalog:** String management techniques (concatenation, interpolation, ternary switching, pluralization utilities) where the fix IS the extraction — restructuring to an intermediate form would be throwaway work. Documented with locations, conversion recipes, and gotchas.
 
 ### Process
 
 **Phase 1: Load context**
-- Read scope output from `i18n-audit-report.md` (tech stack, string inventory)
+- Read scope output from `i18n-pre-extraction-fixes.md` (tech stack, string inventory)
 - If scope hasn't run, perform lightweight string discovery
 
-**Phase 2: Analyze string construction**
-- **Concatenation:** `"Hello, " + name + "!"` — breaks word order for other languages
-- **Interpolation with embedded logic:** `{count > 1 ? "items" : "item"}` — naive pluralization
-- **Sentence fragments assembled from parts:** building sentences from separate string variables
-- Severity rating for each pattern:
-  - **Blocker:** must fix before extraction (concatenation building sentences, naive pluralization)
-  - **Warning:** should fix (minor interpolation issues)
-  - **Info:** worth noting (unusual but not blocking)
+**Phase 2: Analyze string construction** → *Extraction Pattern Catalog*
+- Concatenation, template literals, ternary text switching, fragment assembly
+- Each pattern recorded with technique, location, conversion recipe, and gotchas
+- Exception: genuinely tangled logic (multi-line assembly, cross-function fragments) → Pre-Extraction Fix
 
-**Phase 3: Detect pluralization patterns**
-- Simple if/else or ternary (problematic — many languages have 3-6 plural forms)
-- Array indexing or switch statements (partially handles plurals)
-- Already using a pluralization library (good)
-- No pluralization at all (needs assessment — does the app show counts?)
+**Phase 3: Detect pluralization patterns** → *Extraction Pattern Catalog*
+- Ternary plurals, custom utilities (`pluralize()`), verb conjugation
+- All cataloged with ICU conversion recipes (no value in standardizing English-only pluralization pre-extraction)
 
-**Phase 4: Check formatting patterns**
-- Hardcoded date formats (`MM/DD/YYYY`, `toLocaleDateString()` without locale arg)
-- Hardcoded number formatting (`toFixed(2)`, manual comma insertion)
-- Hardcoded currency symbols (`$`, `€`) or positions
-- Hardcoded measurement units
+**Phase 4: Check formatting patterns** → *Pre-Extraction Fixes*
+- Hardcoded date formats, locale args, currency symbols, number formatting
+- These are library-agnostic code quality fixes — centralize behind `Intl.*` APIs before extraction
 
-**Phase 5: Scan for non-code localizable content**
-- Images/SVGs with embedded text (require asset variants per locale)
-- Hardcoded text in CSS (`content: "..."`)
-- Accessibility attributes with hardcoded text (`aria-label`, `alt`, `title`)
-- Placeholder and title attributes with hardcoded text
+**Phase 5: Scan non-code content** → *Extraction Pattern Catalog*
+- Images/SVGs with text, CSS `content:`, a11y attributes, HTML attributes, confirmation dialogs
+- Extraction targets the agent needs to locate and handle
 
-**Phase 6: Assess translator context**
-- Are strings isolated or grouped by feature?
-- Ambiguous strings that need context notes ("Post", "Save", "Set" — verb or noun?)
-- Strings with interpolated variables where the variable's meaning isn't clear to translators
+**Phase 6: Assess translator context** → *Both*
+- Ambiguous terms and product names → pre-extraction glossary work (feed into terminology skill)
+- Translator descriptions for extracted messages → extraction guidance
 
 **Phase 7: Write to report**
-- Append "Readiness Issues" section with:
-  - Issues table: pattern, severity, count, example locations
-  - Remediation recommendations per issue category
-  - Estimated effort indicators (small/medium/large) per category
-- Contribute items to "Recommended Next Steps"
+- Write "Pre-Extraction Fixes" section: issues table, severity, effort estimates, offer to create implementation plans
+- Write "Extraction Pattern Catalog" section: technique entries with counts, examples, conversion recipes, gotchas
+- Contribute to "Recommended Next Steps" with clear separation between pre-extraction actions and extraction guidance
 
 ---
 

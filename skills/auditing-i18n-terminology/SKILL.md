@@ -7,6 +7,8 @@ description: Use when auditing vocabulary consistency before localization — fi
 
 Ensure a codebase's user-facing vocabulary is consistent — same concepts use the same words, labels are contextually distinct, and ambiguous terms are identified for translator guidance. Inconsistent terminology multiplies translation costs and confuses users.
 
+Terminology standardization and glossary creation are **pre-extraction work** — they should be completed before string extraction so that extracted message keys use consistent naming, translators have context from day one, and ambiguous terms have been resolved in advance. These outputs are independent of i18n library choice.
+
 **Announce at start:** "I'm using the auditing-i18n-terminology skill to analyze vocabulary consistency across this codebase's copy."
 
 ## When to Use
@@ -20,7 +22,7 @@ Ensure a codebase's user-facing vocabulary is consistent — same concepts use t
 
 ## Process
 
-Follow these phases in order. Write findings to the "Terminology Consistency" section of `i18n-audit-report.md`. If the file already exists, replace the "Terminology Consistency" section while preserving other sections. If the file does not exist, create the full report skeleton first, then populate your section.
+Follow these phases in order. Write findings to the "Terminology Consistency" section of `i18n-pre-extraction-fixes.md`. If the file already exists, replace the "Terminology Consistency" section while preserving other sections. If the file does not exist, create it with a report skeleton first, then populate your section.
 
 ```dot
 digraph terminology {
@@ -34,7 +36,7 @@ digraph terminology {
 
 ### Phase 1: Load Context
 
-- Read scope output from `i18n-audit-report.md` for the string inventory and tech stack
+- Read scope output from `i18n-pre-extraction-fixes.md` for the string inventory and tech stack
 - If scope hasn't run, perform lightweight discovery — scan dependency files (package.json, Podfile, build.gradle) to detect the tech stack, then sample up to 20 UI-rendering files to build a working string inventory. This is not a complete inventory — just enough to proceed with terminology analysis.
 - Note the app's domain (e.g., e-commerce, SaaS, social, finance) — domain shapes what terms matter most
 
@@ -138,7 +140,7 @@ Include context notes for every term that is:
 
 ### Phase 6: Write to Report
 
-Append the "Terminology Consistency" section to `i18n-audit-report.md`:
+Append the "Terminology Consistency" section to `i18n-pre-extraction-fixes.md`:
 
 1. **Summary:** Number of inconsistencies found, clusters analyzed, glossary size
 2. **Inconsistencies table:**
