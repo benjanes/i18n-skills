@@ -155,16 +155,35 @@ Before starting, identify the project's framework from `package.json`, `Podfile`
 
 1. **Detect repo structure** — check if this is a monorepo (look for workspace config in root `package.json`, `pnpm-workspace.yaml`, `lerna.json`, or multiple app directories like `apps/`, `packages/`, `services/`). If it's a monorepo, identify the apps and their frameworks
 2. **Determine scope** — if the user pointed at specific files or directories, localize just those. If they said something broad like "localize the repo", scan all apps
-3. **Identify the framework(s)** — check project config files to determine the tech stack. In a monorepo, each app may use a different framework — read the appropriate reference file for each
-4. **Read the appropriate reference file(s)** from the table above
-5. **Check for existing localization setup** — look for existing catalog files, i18n config, or translation imports already in the project. If the project already uses a localization library, use its patterns
-6. **Scan target files** for user-facing strings
-7. **Generate keys** using the hierarchical naming convention (with app prefixes in a monorepo — see the monorepo key naming section)
-8. **Check for duplicates** — before creating a new key, check if the same English string already exists in the catalog. If so, reuse that key. Pay special attention to common UI strings that belong under `common.*`
-9. **Replace strings** in source files with the framework-appropriate function call
-10. **Update the catalog** — append new key-value pairs to the single JSON catalog (create it if it doesn't exist)
-11. **Add necessary imports** — if the replacement pattern requires an import (e.g., `useTranslation` hook), add it to the file
-12. **Report** what was done: how many strings extracted, how many were deduplicated, which files modified, where the catalog was written. In a monorepo, break down the report by app
+3. **Scan and assess scope completeness** — before making any code changes, do a full inventory of the target scope. Identify every location where user-facing strings exist, including:
+   - Strings in the rendering/template layer (JSX, HTML templates, view functions)
+   - Strings in module-scope data definitions (config objects, constant arrays, preference definitions, menu items, route labels)
+   - Strings in individual custom components that aren't part of a shared rendering pipeline
+   - Strings that require threading intl/translation context through components or functions that don't currently have it
+   - Existing catalog keys that are defined but not yet wired up in the code
+
+   Categorize what you find into a clear breakdown. If there are strings that will require non-trivial structural changes (e.g., threading intl context through a component tree, refactoring data definitions to support dynamic values), identify those explicitly.
+
+4. **Confirm scope with the user** — use the `AskUserQuestion` tool to present the scope assessment and get confirmation before proceeding. The question should:
+   - State the total number of strings found and where they live (e.g., "Found 47 user-facing strings across 12 files in the settings page")
+   - Break down what will be covered into concrete categories (e.g., "23 strings in JSX render methods, 18 strings in preference data definitions, 6 strings in custom modal components")
+   - If some areas require more involved changes (like threading intl through a component that doesn't have it), call that out explicitly so the user knows
+   - Offer options like:
+     1. "Localize everything listed above" (default — full coverage of the scope)
+     2. "Let me choose which categories to include"
+
+   **Do NOT silently skip parts of the scope.** The goal is comprehensive i18n of whatever the user asked for. If you'd have to leave some strings untouched, the user must know that upfront and agree to it — never surprise them after the fact with "here's what we didn't do."
+
+5. **Identify the framework(s)** — check project config files to determine the tech stack. In a monorepo, each app may use a different framework — read the appropriate reference file for each
+6. **Read the appropriate reference file(s)** from the table above
+7. **Check for existing localization setup** — look for existing catalog files, i18n config, or translation imports already in the project. If the project already uses a localization library, use its patterns
+8. **Scan target files** for user-facing strings
+9. **Generate keys** using the hierarchical naming convention (with app prefixes in a monorepo — see the monorepo key naming section)
+10. **Check for duplicates** — before creating a new key, check if the same English string already exists in the catalog. If so, reuse that key. Pay special attention to common UI strings that belong under `common.*`
+11. **Replace strings** in source files with the framework-appropriate function call. This includes all string locations confirmed in step 4 — rendering layer, data definitions, custom components, and any intl threading needed
+12. **Update the catalog** — append new key-value pairs to the single JSON catalog (create it if it doesn't exist)
+13. **Add necessary imports** — if the replacement pattern requires an import (e.g., `useTranslation` hook), add it to the file
+14. **Report** what was done: how many strings extracted, how many were deduplicated, which files modified, where the catalog was written. Confirm that all categories from the scope assessment in step 4 were covered. In a monorepo, break down the report by app
 
 ## Important considerations
 
