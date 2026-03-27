@@ -16,7 +16,7 @@ Replace hardcoded user-facing strings in source files with keys that reference a
 
 ## Prerequisite: String pattern analysis
 
-Before extraction, the codebase's strings must be inventoried and their construction patterns cataloged. Check for `i18n-extraction-pattern-catalog.md` in the project root. If it doesn't exist, run auditing-i18n-string-patterns on the specified path(s) (or the entire repo if no paths were specified).
+Before extraction, the codebase's strings must be inventoried and their construction patterns cataloged. Check for `i18n-extraction-pattern-catalog.md` in the project root. If it doesn't exist, you must run auditing-i18n-string-patterns on the specified path(s), specified domain/view or the entire project if not specificed. Do not analyze on your own, you must use the catalogs.
 
 The pattern catalog (`i18n-extraction-pattern-catalog.md`) provides:
 - What string construction patterns exist (template literals, ternaries, plurals, select switches, fragment assembly)
