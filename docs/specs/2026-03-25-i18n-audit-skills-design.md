@@ -8,56 +8,70 @@ Today, this audit process is manual and ad hoc. There is no structured, repeatab
 
 ## Solution
 
-Four Claude Code skills that guide an agent through a structured localization audit of any codebase. Each skill addresses a distinct analysis concern, produces findings in a shared markdown report, and is independently invocable.
+Four Claude Code skills that guide an agent through a structured localization audit of any codebase. Three analysis skills each address a distinct concern, and one orchestrator skill coordinates them and consolidates findings. All are independently invocable.
 
 ## Architecture
 
 ### Skill Set
 
-| Skill | Purpose | Runs after |
-|-------|---------|------------|
-| `auditing-i18n-scope` | Discover hardcoded copy, detect already-localized strings, assess scale | (first) |
-| `auditing-i18n-readiness` | Identify structural blockers for localization | scope |
-| `auditing-i18n-tone` | Assess brand/tone consistency and cultural risks | scope |
-| `auditing-i18n-terminology` | Ensure vocabulary consistency, build proto-glossary | scope |
+| Skill | Role | Purpose |
+|-------|------|---------|
+| `auditing-i18n-readiness` | Orchestrator | Invokes missing analysis skills, consolidates recommendations |
+| `auditing-i18n-string-patterns` | Analysis | Discover all strings, analyze construction patterns, check formatting, assess scope |
+| `auditing-i18n-tone` | Analysis | Assess brand/tone consistency and cultural risks |
+| `auditing-i18n-terminology` | Analysis | Ensure vocabulary consistency, build proto-glossary |
 
 ### Dependency Model
 
 ```
-auditing-i18n-scope (produces string inventory + tech stack context)
+auditing-i18n-readiness (orchestrator — no analysis of its own)
        │
-       ▼
-auditing-i18n-readiness  ┐
-auditing-i18n-tone       ├── consume scope output, run in any order
-auditing-i18n-terminology┘
+       ├── 1. auditing-i18n-string-patterns (if not already run)
+       │      (produces tech stack + string inventory + scope metrics
+       │       that tone and terminology consume)
+       │
+       ├── 2. In parallel (after string-patterns):
+       │       ├── auditing-i18n-tone
+       │       └── auditing-i18n-terminology
+       │
+       └── 3. Consolidate Recommended Next Steps
 ```
 
-The scope skill is a soft dependency. If a downstream skill runs without scope output, it performs lightweight string discovery on its own rather than failing.
+The readiness skill is the primary entry point for general i18n audit requests. It orchestrates the analysis skills, invoking any that haven't already run. Each analysis skill remains independently invocable for targeted use.
 
-### Shared Report
+The string-patterns skill runs first because it produces the tech stack and string inventory that tone and terminology consume. If tone or terminology runs independently without this data, it performs lightweight string discovery on its own rather than failing.
 
-All skills append to `i18n-audit-report.md` in the target repo root:
+### Recommended Next Steps Consolidation
+
+The readiness skill, as the orchestrator, consolidates the "Recommended Next Steps" in its final phase — deduplicating, ordering by priority, and ensuring pre-extraction action items are clearly separated from extraction guidance. If an analysis skill runs independently (not orchestrated), it appends its own recommendations.
+
+### Output Files
+
+Skills write to two files in the target repo root:
+
+**`i18n-pre-extraction-fixes.md`** — pre-extraction findings and recommendations:
 
 ```markdown
-# Localization Audit Report
+# i18n Pre-Extraction Fixes
 
-## Tech Stack & Configuration
-<!-- auditing-i18n-scope -->
+## Tech Stack & Configuration          <!-- auditing-i18n-string-patterns -->
+## Scope Assessment                    <!-- auditing-i18n-string-patterns -->
+## Pre-Extraction Fixes                <!-- auditing-i18n-readiness -->
+## Tone & Brand Analysis               <!-- auditing-i18n-tone -->
+## Terminology Consistency             <!-- auditing-i18n-terminology -->
+## Recommended Next Steps              <!-- each skill contributes -->
+```
 
-## 1. Scope Assessment
-<!-- auditing-i18n-scope -->
+**`i18n-extraction-pattern-catalog.md`** — context for the extraction step:
 
-## 2. Readiness Issues
-<!-- auditing-i18n-readiness -->
+```markdown
+# i18n Extraction Pattern Catalog
 
-## 3. Tone & Brand Analysis
-<!-- auditing-i18n-tone -->
-
-## 4. Terminology Consistency
-<!-- auditing-i18n-terminology -->
-
-## 5. Recommended Next Steps
-<!-- each skill contributes -->
+## Summary                             <!-- auditing-i18n-readiness -->
+## Pattern Entries                     <!-- one section per technique type -->
+## Cross-Cutting Gotchas               <!-- auditing-i18n-readiness -->
+## Translator Context Notes            <!-- auditing-i18n-readiness -->
+## Recommended Next Steps              <!-- extraction guidance -->
 ```
 
 ### Framework Agnosticism
@@ -76,164 +90,100 @@ Personal skills in `~/.claude/skills/`:
 
 ```
 ~/.claude/skills/
-  auditing-i18n-scope/SKILL.md
   auditing-i18n-readiness/SKILL.md
+  auditing-i18n-string-patterns/SKILL.md
   auditing-i18n-tone/SKILL.md
   auditing-i18n-terminology/SKILL.md
 ```
 
 ---
 
-## Skill 1: `auditing-i18n-scope`
-
-### Frontmatter
-
-```yaml
----
-name: auditing-i18n-scope
-description: Use when preparing a codebase for localization, beginning an i18n initiative, or assessing the scale of hardcoded copy before string extraction
----
-```
-
-### Process
-
-**Phase 1: Detect tech stack**
-- Identify languages, frameworks, templating systems
-- Check for existing i18n setup (i18next, react-intl, vue-i18n, .strings, strings.xml, .arb, etc.)
-- Write findings to report "Tech Stack & Configuration" section
-
-**Phase 2: Identify UI surface area**
-- Find all files that render user-facing content
-- Components, views, templates, storyboards, XIBs, layout XML
-- Establish the search perimeter; exclude test files, build output, node_modules
-
-**Phase 3: Detect already-localized strings**
-- Find strings using i18n library calls: `t('key')`, `NSLocalizedString`, `getString(R.string.x)`, `$t('key')`, `intl.formatMessage`, etc.
-- Catalog as "already localized"
-
-**Phase 4: Scan for hardcoded strings**
-- Within UI surface area, find all string literals that appear user-facing
-- Filter out non-user-facing strings: log messages, error codes, debug output, CSS classes, route paths, event names, identifiers, config values
-- Stack-specific heuristics:
-  - **JSX/TSX:** text content between tags, `placeholder=`, `aria-label=`, `title=`, `alt=`
-  - **Swift/ObjC:** bare string literals in UI code (not `NSLocalizedString`), storyboard text
-  - **Kotlin/Java:** `setText()`, `setTitle()`, XML `android:text=`, `android:hint=`
-  - **Templates (Vue/Angular/Svelte):** text interpolation, attribute bindings with string values
-  - **General:** string arguments to UI-rendering functions
-
-**Phase 5: Categorize findings**
-- By location: file, component/view, screen/feature area
-- By type: labels, buttons, headings, body text, error messages, placeholders, tooltips, a11y text
-- By confidence: high (clearly user-facing), medium (likely), low (uncertain)
-
-**Phase 6: Generate scope metrics**
-- Total string count with confidence breakdown
-- Localized vs. hardcoded ratio (done vs. remaining)
-- File count and density heatmap (files ordered by string count)
-- Breakdown by string type
-- Breakdown by feature area (if discernible from directory/component structure)
-
-**Phase 7: Write to report**
-- Append "Tech Stack & Configuration" and "Scope Assessment" sections
-- Include summary tables, metrics, file heatmap
-- Contribute initial items to "Recommended Next Steps"
-
-### Output Example
-
-```markdown
-## 1. Scope Assessment
-
-**Summary:** 847 hardcoded strings across 62 files. 23 strings already localized (3%).
-
-| Metric | Count |
-|--------|-------|
-| Total user-facing strings | 870 |
-| Already localized | 23 (3%) |
-| Hardcoded (high confidence) | 612 |
-| Hardcoded (medium confidence) | 189 |
-| Hardcoded (low confidence) | 46 |
-| Files with hardcoded strings | 62 |
-
-### String Density Heatmap (top 10 files)
-| File | Strings | Type |
-|------|---------|------|
-| src/components/Dashboard.tsx | 47 | labels, headings, buttons |
-| src/pages/Settings.tsx | 38 | labels, descriptions |
-| ... | ... | ... |
-
-### Breakdown by Type
-| Type | Count | % |
-|------|-------|---|
-| Button labels | 156 | 18% |
-| Headings | 89 | 11% |
-| Body text | 203 | 24% |
-| Error messages | 134 | 16% |
-| Placeholders | 78 | 9% |
-| Tooltips | 45 | 5% |
-| A11y text | 142 | 17% |
-```
-
----
-
-## Skill 2: `auditing-i18n-readiness`
+## Skill 1: `auditing-i18n-readiness`
 
 ### Frontmatter
 
 ```yaml
 ---
 name: auditing-i18n-readiness
-description: Use when assessing localization blockers — structural issues like string concatenation, naive pluralization, hardcoded formatting, or missing translator context that must be fixed before string extraction
+description: Use when assessing localization readiness, auditing a codebase for i18n, or preparing for string extraction — orchestrates all audit skills and consolidates findings
 ---
 ```
+
+### Orchestrator Role
+
+This skill performs no analysis of its own. It checks which analysis skills have already run, invokes any that are missing, and consolidates the Recommended Next Steps across all skills.
+
+### Process
+
+**Phase 1: Check existing state**
+- Examine `i18n-pre-extraction-fixes.md` and `i18n-extraction-pattern-catalog.md` for section markers indicating which skills have run
+
+**Phase 2: Invoke missing skills**
+- `auditing-i18n-string-patterns` first (if missing) — other skills consume its output
+- `auditing-i18n-string-patterns`, `auditing-i18n-tone`, `auditing-i18n-terminology` in parallel (after scope)
+
+**Phase 3: Consolidate**
+- Deduplicate Recommended Next Steps across all skills
+- Order by priority, separate pre-extraction actions from extraction guidance
+- Offer to create implementation plans for all actionable items
+- Write consolidated section to `i18n-pre-extraction-fixes.md`
+
+---
+
+## Skill 2: `auditing-i18n-string-patterns`
+
+### Frontmatter
+
+```yaml
+---
+name: auditing-i18n-string-patterns
+description: Use when analyzing string construction patterns, pluralization, formatting, and non-code content for i18n — catalogs what the extraction step must handle and identifies formatting fixes to do beforehand
+---
+```
+
+### Dual-Output Model
+
+This skill categorizes findings using a framework that separates pre-extraction fixes from extraction patterns:
+
+- **Pre-Extraction Fixes** → `i18n-pre-extraction-fixes.md`: Formatting issues (dates, numbers, currency) that are library-agnostic and should be centralized before extraction.
+- **Extraction Pattern Catalog** → `i18n-extraction-pattern-catalog.md`: String construction techniques (concatenation, interpolation, ternary switching, pluralization) where the fix IS the extraction. Documented with locations, conversion recipes, and gotchas.
 
 ### Process
 
 **Phase 1: Load context**
-- Read scope output from `i18n-audit-report.md` (tech stack, string inventory)
+- Read scope output from `i18n-pre-extraction-fixes.md` (tech stack, string inventory)
 - If scope hasn't run, perform lightweight string discovery
 
-**Phase 2: Analyze string construction**
-- **Concatenation:** `"Hello, " + name + "!"` — breaks word order for other languages
-- **Interpolation with embedded logic:** `{count > 1 ? "items" : "item"}` — naive pluralization
-- **Sentence fragments assembled from parts:** building sentences from separate string variables
-- Severity rating for each pattern:
-  - **Blocker:** must fix before extraction (concatenation building sentences, naive pluralization)
-  - **Warning:** should fix (minor interpolation issues)
-  - **Info:** worth noting (unusual but not blocking)
+**Phase 2: Analyze string construction** → *Extraction Pattern Catalog*
+- Concatenation, template literals, ternary text switching, fragment assembly
+- Each pattern recorded with technique, location, conversion recipe, and gotchas
+- Exception: genuinely tangled logic (multi-line assembly, cross-function fragments) → Pre-Extraction Fix
 
-**Phase 3: Detect pluralization patterns**
-- Simple if/else or ternary (problematic — many languages have 3-6 plural forms)
-- Array indexing or switch statements (partially handles plurals)
-- Already using a pluralization library (good)
-- No pluralization at all (needs assessment — does the app show counts?)
+**Phase 3: Detect pluralization patterns** → *Extraction Pattern Catalog*
+- Ternary plurals, custom utilities (`pluralize()`), verb conjugation
+- All cataloged with ICU conversion recipes (no value in standardizing English-only pluralization pre-extraction)
 
-**Phase 4: Check formatting patterns**
-- Hardcoded date formats (`MM/DD/YYYY`, `toLocaleDateString()` without locale arg)
-- Hardcoded number formatting (`toFixed(2)`, manual comma insertion)
-- Hardcoded currency symbols (`$`, `€`) or positions
-- Hardcoded measurement units
+**Phase 4: Check formatting patterns** → *Pre-Extraction Fixes*
+- Hardcoded date formats, locale args, currency symbols, number formatting
+- These are library-agnostic code quality fixes — centralize behind `Intl.*` APIs before extraction
 
-**Phase 5: Scan for non-code localizable content**
-- Images/SVGs with embedded text (require asset variants per locale)
-- Hardcoded text in CSS (`content: "..."`)
-- Accessibility attributes with hardcoded text (`aria-label`, `alt`, `title`)
-- Placeholder and title attributes with hardcoded text
+**Phase 5: Scan non-code content** → *Extraction Pattern Catalog*
+- Images/SVGs with text, CSS `content:`, a11y attributes, HTML attributes, confirmation dialogs
+- Extraction targets the agent needs to locate and handle
 
-**Phase 6: Assess translator context**
-- Are strings isolated or grouped by feature?
-- Ambiguous strings that need context notes ("Post", "Save", "Set" — verb or noun?)
-- Strings with interpolated variables where the variable's meaning isn't clear to translators
+**Phase 6: Assess translator context** → *Both*
+- Ambiguous terms and product names → pre-extraction glossary work (feed into terminology skill)
+- Translator descriptions for extracted messages → extraction guidance
 
-**Phase 7: Write to report**
-- Append "Readiness Issues" section with:
-  - Issues table: pattern, severity, count, example locations
-  - Remediation recommendations per issue category
-  - Estimated effort indicators (small/medium/large) per category
-- Contribute items to "Recommended Next Steps"
+**Phase 7: Write reports**
+- Write "Pre-Extraction Fixes" section to `i18n-pre-extraction-fixes.md`
+- Write full pattern catalog to `i18n-extraction-pattern-catalog.md`
+- Contribute to Recommended Next Steps in both files
 
 ---
 
 ## Skill 3: `auditing-i18n-tone`
+
 
 ### Frontmatter
 

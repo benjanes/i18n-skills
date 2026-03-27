@@ -7,6 +7,8 @@ description: Use when auditing copy for brand and tone consistency before locali
 
 Assess whether a codebase's user-facing copy is consistent in tone and aligned with brand guidelines. Inconsistent tone creates translation problems — translators need a stable source voice to produce a coherent target voice.
 
+Tone fixes are **pre-extraction work** — source copy should be consistent and culturally neutral before extraction. Fixing tone after extraction means re-extracting and re-translating affected strings, so it's cheaper and cleaner to stabilize the source voice first. Replacing idioms, culture-specific references, and inconsistent formality levels now means the extraction agent works with clean, translatable copy.
+
 **Announce at start:** "I'm using the auditing-i18n-tone skill to analyze brand and tone consistency across this codebase's copy."
 
 ## When to Use
@@ -16,11 +18,21 @@ Assess whether a codebase's user-facing copy is consistent in tone and aligned w
 - Identifying copy that will be problematic to translate (idioms, humor, culture-specific references)
 - Assessing whether the app's "voice" is stable enough to localize coherently
 
-**Do not use for:** Scope assessment (use auditing-i18n-scope), structural issues (use auditing-i18n-readiness), or vocabulary consistency (use auditing-i18n-terminology).
+**Do not use for:** Scope/string pattern assessment (use auditing-i18n-string-patterns), vocabulary consistency (use auditing-i18n-terminology), or full readiness audit (use auditing-i18n-readiness).
+
+## Scope Constraint
+
+When invoked as a command, arguments are treated as paths to analyze:
+
+```
+/auditing-i18n-tone apps/web/src packages/components/src
+```
+
+If no paths are provided, analyze the entire repository (excluding test files, build output, node_modules, and other non-source directories). Note the analyzed paths in the report header so readers know the audit's scope.
 
 ## Process
 
-Follow these phases in order. Write findings to the "Tone & Brand Analysis" section of `i18n-audit-report.md`. If the file already exists, replace the "Tone & Brand Analysis" section while preserving other sections. If the file does not exist, create the full report skeleton first, then populate your section.
+Follow these phases in order. Write findings to the "Tone & Brand Analysis" section of `i18n-pre-extraction-fixes.md`. If the file already exists, replace the "Tone & Brand Analysis" section while preserving other sections. If the file does not exist, create it with a report skeleton first, then populate your section.
 
 ```dot
 digraph tone {
@@ -34,7 +46,7 @@ digraph tone {
 
 ### Phase 1: Load Context
 
-- Read scope output from `i18n-audit-report.md` for the string inventory and tech stack
+- Read tech stack and string inventory from `i18n-pre-extraction-fixes.md` (written by auditing-i18n-string-patterns)
 - If scope hasn't run, perform lightweight discovery — scan dependency files (package.json, Podfile, build.gradle) to detect the tech stack, then sample up to 20 UI-rendering files to build a working string inventory. This is not a complete inventory — just enough to proceed with tone analysis.
 - Search for brand/style guide documents in the repo:
   - `STYLE_GUIDE.md`, `WRITING_GUIDE.md`, `CONTENT_GUIDE.md`
@@ -121,7 +133,7 @@ For each risk item, suggest a neutral alternative that conveys the same meaning 
 
 ### Phase 6: Write to Report
 
-Append the "Tone & Brand Analysis" section to `i18n-audit-report.md`:
+Append the "Tone & Brand Analysis" section to `i18n-pre-extraction-fixes.md`:
 
 1. **Baseline tone profile:** The four-dimension summary with examples
 2. **Brand guideline alignment:** Match/mismatch summary (or note that no guidelines exist)
